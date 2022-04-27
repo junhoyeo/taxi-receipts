@@ -9,9 +9,11 @@
     "start": "node src/index.js"
   },
   "dependencies": {
+    "axios": "^0.27.2",
     "cookie": "^0.5.0",
     "parse-curl": "^0.2.6",
-    "puppeteer": "^13.6.0"
+    "puppeteer": "^13.6.0",
+    "query-string": "^7.1.1"
   },
   "devDependencies": {
     "@trivago/prettier-plugin-sort-imports": "^3.2.0",

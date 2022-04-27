@@ -1,11 +1,20 @@
+const queryString = require('query-string');
 const cookie = require('cookie');
 const { exit } = require('process');
 const puppeteer = require('puppeteer');
 const parseCurl = require('parse-curl');
 const path = require('path');
+const { default: axios } = require('axios');
 const fs = require('fs').promises;
 
 const omit = (prop, { [prop]: _, ...rest }) => rest;
+
+const delay = (ms) =>
+  new Promise((resolve) =>
+    setTimeout(() => {
+      resolve();
+    }, ms),
+  );
 
 const getConfigurations = async () => {
   const buffer = await fs.readFile(path.join(__dirname, 'curl.raw'));
@@ -15,26 +24,20 @@ const getConfigurations = async () => {
   headers = omit('Set-Cookie', headers);
 
   const rawCookies = config.header['Set-Cookie'] ?? '';
-  let cookies = cookie.parse(rawCookies);
-  cookies = Object.entries(cookies).map(([name, value]) => ({
-    name,
-    value,
-    domain: 'service.kakaomobility.com',
-  }));
+  const cookies = cookie.parse(rawCookies);
 
   return { headers, cookies };
 };
 
 const main = async () => {
   const { headers, cookies } = await getConfigurations();
-  console.log(headers, cookies);
 
   const browserSize = {
     width: 375,
-    height: 812,
+    height: 1200,
   };
   const browser = await puppeteer.launch({
-    headless: true,
+    headless: false,
     defaultViewport: browserSize,
     args: [
       `--window-size=${browserSize.width},${browserSize.height}`,
@@ -42,13 +45,42 @@ const main = async () => {
     ],
   });
   const page = await browser.newPage();
+  await page.setUserAgent(
+    'User-Agent: Mozilla/5.0 (iPhone; CPU iPhone OS 15_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148/KakaoTApp v5.11.0',
+  );
 
   await page.setExtraHTTPHeaders(headers);
-  await page.setCookie(...cookies);
 
-  // TODO: Capture receipt from https://service.kakaomobility.com/history/detail/?id=${receipt_id}
+  const cookieList = Object.entries(cookies).map(([name, value]) => ({
+    name,
+    value,
+    domain: 'service.kakaomobility.com',
+  }));
+  await page.setCookie(...cookieList);
+
   await page.goto('https://service.kakaomobility.com/history');
-  await page.screenshot({ path: 'screenshot.png' });
+
+  const data = await page.evaluate(async () => {
+    const response = await fetch(
+      'https://service.kakaomobility.com/api/history/records/template?offset=0&limit=5&products=TAXI',
+    );
+    const data = await response.json();
+    return data;
+  });
+  console.log(data);
+
+  const receipts = data.items.map((v) => v.id);
+
+  for (let i = 0; i < receipts.length; i++) {
+    const receiptID = receipts[i];
+
+    await page
+      .goto(`https://service.kakaomobility.com/history/detail/?id=${receiptID}`)
+      .catch((error) => console.error(error));
+    await delay(1_000);
+    await page.screenshot({ path: `screenshot-${receiptID}.png` });
+    await delay(1_000);
+  }
 
   await browser.close();
 };
