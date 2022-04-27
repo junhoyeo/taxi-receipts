@@ -34,6 +34,7 @@ const main = async () => {
     height: 812,
   };
   const browser = await puppeteer.launch({
+    headless: true,
     defaultViewport: browserSize,
     args: [
       `--window-size=${browserSize.width},${browserSize.height}`,
@@ -45,6 +46,7 @@ const main = async () => {
   await page.setExtraHTTPHeaders(headers);
   await page.setCookie(...cookies);
 
+  // TODO: Capture receipt from https://service.kakaomobility.com/history/detail/?id=${receipt_id}
   await page.goto('https://service.kakaomobility.com/history');
   await page.screenshot({ path: 'screenshot.png' });
 
