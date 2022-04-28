@@ -1,19 +1,17 @@
-const queryString = require('query-string');
-const cookie = require('cookie');
-const { exit } = require('process');
-const puppeteer = require('puppeteer');
-const parseCurl = require('parse-curl');
-const path = require('path');
-const fs = require('fs').promises;
+import cookie from 'cookie';
+import { promises as fs } from 'fs';
+import parseCurl from 'parse-curl';
+import path from 'path';
+import { exit } from 'process';
+import puppeteer from 'puppeteer';
+import queryString from 'query-string';
 
-const omit = (prop, { [prop]: _, ...rest }) => rest;
+import { HistoryResponse } from './types';
 
-const delay = (ms) =>
-  new Promise((resolve) =>
-    setTimeout(() => {
-      resolve();
-    }, ms),
-  );
+const omit = (prop: string, { [prop]: _, ...rest }) => rest;
+
+const delay = (ms: number) =>
+  new Promise<void>((resolve) => setTimeout(resolve, ms));
 
 const getConfigurations = async () => {
   const buffer = await fs.readFile(path.join(__dirname, 'curl.raw'));
@@ -67,12 +65,11 @@ const main = async () => {
       products: 'TAXI',
     },
   });
-  const data = await page.evaluate(async (historyURL) => {
+  const data: HistoryResponse = await page.evaluate(async (historyURL) => {
     const response = await fetch(historyURL);
     const data = await response.json();
     return data;
   }, historyURL);
-  console.log(data);
 
   const receipts = data.items.map((v) => v.id);
 
