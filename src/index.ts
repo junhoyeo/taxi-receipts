@@ -6,7 +6,7 @@ import { exit } from 'process';
 import puppeteer from 'puppeteer';
 import queryString from 'query-string';
 
-import { HistoryResponse } from './types';
+import { HistoryItem, HistoryResponse } from './types';
 
 const omit = (prop: string, { [prop]: _, ...rest }) => rest;
 
@@ -57,36 +57,67 @@ const main = async () => {
 
   await page.goto('https://service.kakaomobility.com/history');
 
-  const historyURL = queryString.stringifyUrl({
-    url: 'https://service.kakaomobility.com/api/history/records/template',
-    query: {
-      offset: 0,
-      limit: 5,
-      products: 'TAXI',
-    },
-  });
-  const data: HistoryResponse = await page.evaluate(async (historyURL) => {
-    const response = await fetch(historyURL);
-    const data = await response.json();
-    return data;
-  }, historyURL);
+  // FIXME: replace hardcoded
+  const hasCached = true;
+  let receipts: HistoryItem[] = [];
+  let offset: number = 0;
 
-  const receipts = data.items.map((v) => v.id);
+  if (hasCached) {
+    const data = await fs.readFile('./history.cache.raw');
+    receipts = JSON.parse(data.toString());
+  } else {
+    while (true) {
+      const historyURL = queryString.stringifyUrl({
+        url: 'https://service.kakaomobility.com/api/history/records/template',
+        query: {
+          offset,
+          limit: 5,
+          products: 'TAXI',
+        },
+      });
+      const data: HistoryResponse | undefined = await page
+        .evaluate(async (historyURL) => {
+          const response = await fetch(historyURL);
+          const data = await response.json();
+          return data;
+        }, historyURL)
+        .catch(() => undefined);
 
+      if (data) {
+        if (data.items[0]?.datetime.startsWith('2021-09')) {
+          break;
+        }
+        console.log(
+          data.items[0]?.datetime,
+          data.items[data.items.length - 1]?.datetime,
+        );
+        receipts = [...receipts, ...data.items];
+        await fs.writeFile('./history.cache.raw', JSON.stringify(receipts));
+      } else {
+        break;
+      }
+
+      offset += data.items.length;
+    }
+  }
+
+  console.log({ receiptLength: receipts.length });
   for (let i = 0; i < receipts.length; i++) {
-    const receiptID = receipts[i];
+    const receipt = receipts[i];
+    const receiptID = receipt.id;
 
     const historyDetailURL = queryString.stringifyUrl({
       url: 'https://service.kakaomobility.com/history/detail/',
       query: { id: receiptID },
     });
+    console.log({ historyDetailURL, receiptID });
 
     await page //
       .goto(historyDetailURL)
       .catch((error) => console.error(error));
     await delay(1_000);
     await page.screenshot({
-      path: `screenshot-${receiptID}.png`,
+      path: `./screenshots/${receipt.datetime}-${receiptID}.png`,
     });
     await delay(800);
   }

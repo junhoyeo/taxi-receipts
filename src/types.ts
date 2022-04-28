@@ -24,7 +24,7 @@ export type HistoryItem = {
   orderId: string;
   userId: number;
   reviewRequestId?: any;
-  datetime: Date;
+  datetime: string;
   b2b: boolean;
   template: HistoryItemTemplate;
   deleteExceptionCode?: any;
