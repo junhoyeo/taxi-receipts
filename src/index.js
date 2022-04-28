@@ -4,7 +4,6 @@ const { exit } = require('process');
 const puppeteer = require('puppeteer');
 const parseCurl = require('parse-curl');
 const path = require('path');
-const { default: axios } = require('axios');
 const fs = require('fs').promises;
 
 const omit = (prop, { [prop]: _, ...rest }) => rest;
@@ -37,7 +36,7 @@ const main = async () => {
     height: 1200,
   };
   const browser = await puppeteer.launch({
-    headless: false,
+    headless: true,
     defaultViewport: browserSize,
     args: [
       `--window-size=${browserSize.width},${browserSize.height}`,
@@ -60,13 +59,19 @@ const main = async () => {
 
   await page.goto('https://service.kakaomobility.com/history');
 
-  const data = await page.evaluate(async () => {
-    const response = await fetch(
-      'https://service.kakaomobility.com/api/history/records/template?offset=0&limit=5&products=TAXI',
-    );
+  const historyURL = queryString.stringifyUrl({
+    url: 'https://service.kakaomobility.com/api/history/records/template',
+    query: {
+      offset: 0,
+      limit: 5,
+      products: 'TAXI',
+    },
+  });
+  const data = await page.evaluate(async (historyURL) => {
+    const response = await fetch(historyURL);
     const data = await response.json();
     return data;
-  });
+  }, historyURL);
   console.log(data);
 
   const receipts = data.items.map((v) => v.id);
@@ -74,12 +79,19 @@ const main = async () => {
   for (let i = 0; i < receipts.length; i++) {
     const receiptID = receipts[i];
 
-    await page
-      .goto(`https://service.kakaomobility.com/history/detail/?id=${receiptID}`)
+    const historyDetailURL = queryString.stringifyUrl({
+      url: 'https://service.kakaomobility.com/history/detail/',
+      query: { id: receiptID },
+    });
+
+    await page //
+      .goto(historyDetailURL)
       .catch((error) => console.error(error));
     await delay(1_000);
-    await page.screenshot({ path: `screenshot-${receiptID}.png` });
-    await delay(1_000);
+    await page.screenshot({
+      path: `screenshot-${receiptID}.png`,
+    });
+    await delay(800);
   }
 
   await browser.close();
