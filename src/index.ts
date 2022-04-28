@@ -102,6 +102,17 @@ const main = async () => {
   }
 
   console.log({ receiptLength: receipts.length });
+
+  const totalUsageAmount = receipts.reduce((total, receipt) => {
+    const amount = receipt.template.contents.find((v) => v.label === '금액')
+      ?.values[0]?.value;
+    if (!amount) {
+      return total;
+    }
+    return total + parseInt(amount.replaceAll(',', ''));
+  }, 0);
+  console.log({ totalUsageAmount });
+
   for (let i = 0; i < receipts.length; i++) {
     const receipt = receipts[i];
     const receiptID = receipt.id;
