@@ -6,7 +6,7 @@ import { exit } from 'process';
 import puppeteer from 'puppeteer';
 import queryString from 'query-string';
 
-import { HistoryItem, HistoryResponse } from './types';
+import { HistoryItem, HistoryResponse, Receipt } from './types';
 
 const omit = (prop: string, { [prop]: _, ...rest }) => rest;
 
@@ -59,12 +59,12 @@ const main = async () => {
 
   // FIXME: replace hardcoded
   const hasCached = true;
-  let receipts: HistoryItem[] = [];
+  let historyItems: HistoryItem[] = [];
   let offset: number = 0;
 
   if (hasCached) {
     const data = await fs.readFile('./history.cache.raw');
-    receipts = JSON.parse(data.toString());
+    historyItems = JSON.parse(data.toString());
   } else {
     while (true) {
       const historyURL = queryString.stringifyUrl({
@@ -91,8 +91,8 @@ const main = async () => {
           data.items[0]?.datetime,
           data.items[data.items.length - 1]?.datetime,
         );
-        receipts = [...receipts, ...data.items];
-        await fs.writeFile('./history.cache.raw', JSON.stringify(receipts));
+        historyItems = [...historyItems, ...data.items];
+        await fs.writeFile('./history.cache.raw', JSON.stringify(historyItems));
       } else {
         break;
       }
@@ -101,16 +101,79 @@ const main = async () => {
     }
   }
 
+  const receipts: Receipt[] = historyItems.flatMap((receipt) => {
+    if (receipt.template.tags[0]?.label === '결제취소') {
+      // 결제취소
+      return [];
+    }
+    const price = parseInt(
+      receipt.template.contents
+        .find((v) => v.label === '금액')
+        ?.values[0]?.value?.replaceAll(',', '') ?? '',
+      10,
+    );
+    if (isNaN(price)) {
+      // 직접결제
+      return [];
+    }
+
+    const source =
+      receipt.template.contents.find((v) => v.label === '출발')?.values[0]
+        ?.value ?? '';
+
+    const destination =
+      receipt.template.contents.find((v) => v.label === '도착')?.values[0]
+        ?.value ?? '';
+
+    const result = {
+      id: receipt.id,
+      price,
+      datetime: receipt.datetime,
+      places: {
+        source,
+        destination,
+      },
+    };
+
+    const isSourceOffice = [
+      '선진',
+      '터틀스커피',
+      '선릉로 608',
+      '한국외식업중앙회',
+      '강남구의사회',
+      '맨투맨대부',
+      '앤레커피',
+      '리엔케이 선릉점',
+      '김정일정신건강의학과의원',
+      '감도 성수', // SM
+    ].some((keyword) => source.includes(keyword));
+    const isSourceHome = ['위례', '하남'].some((keyword) =>
+      source.includes(keyword),
+    );
+    const isDestinationHome = ['위례', '하남'].some((keyword) =>
+      destination.includes(keyword),
+    );
+
+    if (isSourceHome) {
+      console.log(source, '->', destination);
+      return [];
+    }
+    if (isSourceOffice && isDestinationHome) {
+      console.log(source, '->', destination);
+      return result;
+    } else if (source.includes('피네이션')) {
+      // Exceptions
+      return result;
+    }
+    return [];
+  });
+
   console.log({ receiptLength: receipts.length });
 
-  const totalUsageAmount = receipts.reduce((total, receipt) => {
-    const amount = receipt.template.contents.find((v) => v.label === '금액')
-      ?.values[0]?.value;
-    if (!amount) {
-      return total;
-    }
-    return total + parseInt(amount.replaceAll(',', ''));
-  }, 0);
+  const totalUsageAmount = receipts.reduce(
+    (total, receipt) => total + receipt.price,
+    0,
+  );
   console.log({ totalUsageAmount });
 
   for (let i = 0; i < receipts.length; i++) {
@@ -128,7 +191,7 @@ const main = async () => {
       .catch((error) => console.error(error));
     await delay(1_000);
     await page.screenshot({
-      path: `./screenshots/${receipt.datetime}-${receiptID}.png`,
+      path: `./screenshots/${receipt.datetime}-${receiptID}-${receipt.price}.png`,
     });
     await delay(800);
   }
