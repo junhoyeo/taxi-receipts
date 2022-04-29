@@ -1,7 +1,14 @@
 export type HistoryItemTemplate = {
   productCode: string;
   meta: {};
-  tags: any[];
+  tags:
+    | [
+        {
+          label: '결제취소';
+          theme: 'darken';
+        },
+      ]
+    | [];
   contents: {
     label: string;
     values: {
@@ -28,6 +35,16 @@ export type HistoryItem = {
   b2b: boolean;
   template: HistoryItemTemplate;
   deleteExceptionCode?: any;
+};
+
+export type Receipt = {
+  id: string;
+  price: number;
+  datetime: string;
+  places: {
+    source: string;
+    destination: string;
+  };
 };
 
 export type HistoryResponse = {
