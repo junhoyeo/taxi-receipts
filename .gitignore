@@ -3,4 +3,4 @@ node_modules
 *.log
 
 *.raw
-*.png
+screenshots/*.png
