@@ -1,3 +1,5 @@
+<img src="./docs/images/kakao-t/demo.gif" width="680" />
+
 <h2>
 귀차니즘 만렙인 저는<br />
 입사 이례로 야근택시비 청구를<br />
